@@ -1,5 +1,7 @@
 # Progress
 
+[2026-04-10] Implemented Resolution Round for Agent Debate workflow. Added 4-phase gap resolution system between Skeptic and Referee: Gap Extraction (parses "unverified"/"missing"/"pending" flags), Task Routing (assigns to Scout/Aesthetician/Historian/Translator by domain), Bounded Research (no search limits, terminal states: RESOLVED/PARTIALLY_RESOLVED/UNRESOLVABLE), and Skeptic Re-Challenge (reviews for press releases, circular sourcing, weak evidence). Created TypeScript orchestrator at src/lib/agents/debate-workflow.ts with 5-iteration max and loud failure via WORKFLOW_FAILURE.md. Updated Referee persona to stratify confidence by resolution state: RESOLVED → high-confidence signals, PARTIALLY_RESOLVED → caveats required, UNRESOLVABLE → "Watching (Insufficient Data)" section (not main analysis). Added persistent confidence ledger at data/ledger.json (auto-generates ledger.md view) to track resolved facts and unresolvable gaps across runs, preventing re-litigation of dead ends. Created runs/{run-id}/ file structure with gaps.md, resolutions/{agent}.md, skeptic_rechallenge.md, iteration_log.md for audit trail. Added npm run debate CLI trigger with auto-commit hook option. Tested with April 11, 2026 debate transcript - successfully extracted PENGU character visual gaps, routed to Aesthetician, produced PARTIALLY_RESOLVED state, updated ledger.
+
 [2026-04-09] Fix pty.node macOS Gatekeeper warning: added xattr quarantine flag removal before ad-hoc codesigning of extracted native binaries in Electron main process.
 
 [2026-04-09] Added `export const dynamic = "force-dynamic"` to all `/api/system/*` route handlers. Without this, Next.js could cache these routes during production builds, potentially serving stale update check results and triggering a false "update available" popup on fresh installs.
@@ -23,4 +25,7 @@
 [2026-04-09] Added "Open in Finder" option to each sidebar tree item's right-click context menu. Reveals the item in Finder (macOS) or Explorer (Windows) instead of only supporting the top-level knowledge base directory.
 
 [2026-04-09] Fixed Claude CLI not being found in Electron DMG builds. The packaged app inherits macOS GUI PATH which lacks NVM paths. Added NVM bin detection (scans ~/.nvm/versions/node/) to RUNTIME_PATH in provider-cli.ts, enrichedPath in cabinet-daemon.ts, and commandCandidates in claude-code provider.
+
+
+[2026-04-10] **PRODUCTION HARDENING:** Rebuilt Resolution Round for production reliability. Created DirectResearchExecutor that bypasses daemon/PTY layer (Windows timeout issues) and calls Anthropic API directly with Tavily web search integration. Structured JSON output, full cost tracking (/usr/bin/bash.02-0.06 per gap, ~/usr/bin/bash.40 per debate run). Added .env API key configuration (ANTHROPIC_API_KEY, TAVILY_API_KEY). System now production-ready with real research capabilities. See PRODUCTION_DEPLOYMENT.md for complete deployment guide.
 
