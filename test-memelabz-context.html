@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Context Bundle Test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #0f0f0f;
+      color: #e0e0e0;
+    }
+    h1 { color: #00ff88; }
+    .status { padding: 10px; background: #1a1a1a; border-radius: 4px; margin-bottom: 20px; }
+    .token-card {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+    .token-card h3 { color: #00ff88; margin-top: 0; }
+    .token-card .price { font-size: 24px; font-weight: bold; color: #fff; }
+    .token-card .change-positive { color: #00ff88; }
+    .token-card .change-negative { color: #ff4444; }
+    .token-card .meta { color: #888; font-size: 14px; }
+    pre { background: #1a1a1a; padding: 15px; border-radius: 4px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>🔥 Context Bundle Test</h1>
+  <div class="status" id="status">Loading...</div>
+  <div id="content"></div>
+
+  <script>
+    fetch('http://localhost:3000/api/meta-desk/context-bundle')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('status').innerHTML = `
+          <strong>Status:</strong> ${data.status} |
+          <strong>Date:</strong> ${data.date} |
+          <strong>Last Updated:</strong> ${data.sections.trending?.last_updated || 'N/A'}
+        `;
+
+        if (data.sections.trending && data.sections.trending.tokens) {
+          const tokensHtml = data.sections.trending.tokens.slice(0, 5).map(token => {
+            const changeClass = token.price_change_24h_pct > 0 ? 'change-positive' : 'change-negative';
+            return `
+              <div class="token-card">
+                <h3>#${token.rank} ${token.ticker} - ${token.name}</h3>
+                <div class="price">$${token.price_usd.toFixed(token.price_usd < 0.01 ? 6 : 2)}</div>
+                <div class="${changeClass}">
+                  ${token.price_change_24h_pct > 0 ? '+' : ''}${token.price_change_24h_pct.toFixed(1)}% 24h
+                </div>
+                <div class="meta">
+                  Volume: $${(token.volume_24h_usd / 1_000_000).toFixed(2)}M |
+                  Liquidity: $${(token.liquidity_usd / 1_000).toFixed(0)}K |
+                  Market Cap: $${(token.market_cap_usd / 1_000_000).toFixed(1)}M
+                </div>
+                <p>${token.why_trending}</p>
+                <a href="${token.dexscreener_url}" target="_blank" style="color: #00ff88">View on DexScreener →</a>
+              </div>
+            `;
+          }).join('');
+
+          document.getElementById('content').innerHTML = `
+            <h2>Top 5 Trending Tokens</h2>
+            ${tokensHtml}
+            <details>
+              <summary style="cursor: pointer; color: #00ff88; margin-top: 20px">View Full JSON Response</summary>
+              <pre>${JSON.stringify(data, null, 2)}</pre>
+            </details>
+          `;
+        } else {
+          document.getElementById('content').innerHTML = '<p>No trending data available</p>';
+        }
+      })
+      .catch(err => {
+        document.getElementById('status').innerHTML = `<strong>Error:</strong> ${err.message}`;
+        document.getElementById('content').innerHTML = `<pre>Failed to fetch data: ${err}</pre>`;
+      });
+  </script>
+</body>
+</html>

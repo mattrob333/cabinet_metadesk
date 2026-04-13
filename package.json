@@ -10,6 +10,8 @@
     "dev:all": "npm run dev & npm run dev:daemon",
     "debug:chrome": "bash scripts/launch-chrome-debug.sh",
     "debate": "tsx scripts/trigger-debate.ts",
+    "scrape:dex": "tsx scripts/run-dex-scraper.ts",
+    "scrape:test": "tsx scripts/run-dex-scraper.ts --dry-run",
     "build": "next build",
     "electron:prep": "node scripts/prepare-electron-package.mjs",
     "release:manifest": "node scripts/generate-release-manifest.mjs",
