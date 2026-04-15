@@ -1,31 +1,108 @@
 /**
  * Context Bundle Builder
  *
- * Assembles the intelligence package for MemeLabz consumption
- * Simplified version without debate workflow integration
+ * Assembles the intelligence package for MemeLabz consumption.
+ * Combines three on-disk sources:
+ *   - Trending tokens:  data/observations/onchain/dexscreener/ (latest)
+ *   - Daily brief:      data/meta-desk/daily-briefs/{date}.md
+ *   - Confidence ledger: data/ledger.json (FULL-confidence entities only)
  */
 
+import fs from 'fs/promises';
+import path from 'path';
 import { readObservation, getLatestObservation } from '../scrapers/observation-writer';
 import type { TrendingToken } from '../scrapers/types';
+import {
+  loadDailyBrief,
+  pickLatestRunForDate,
+  loadRunDetail,
+  type DailyBrief,
+} from './debate-reader';
+import type { Ledger, LedgerEntity } from '../agents/resolution/ledger-manager';
+
+const LEDGER_PATH = path.join(process.cwd(), 'data', 'ledger.json');
+
+export interface BriefSection {
+  date: string;
+  source_path: string;
+  frontmatter: Record<string, unknown>;
+  agents: Record<string, string>;
+  referee_report: string | null;
+  run_id: string | null;
+  run_status: string | null;
+}
+
+export interface LedgerSection {
+  last_updated: string;
+  version: string;
+  entity_count: number;
+  high_confidence_entities: Array<{ name: string } & LedgerEntity>;
+}
 
 export interface ContextBundle {
   date: string;
   generated_at: string;
-  status: 'complete' | 'partial' | 'unavailable';
+  // `status` preserves the original contract: "complete" when trending data
+  // is present (the minimum shipping slice), "unavailable" when nothing is on
+  // disk. Consumers wanting finer granularity should inspect `sections_present`.
+  status: 'complete' | 'unavailable';
+  sections_present: Array<'trending' | 'brief' | 'ledger'>;
   sections: {
-    brief: null; // Not integrated yet
+    brief: BriefSection | null;
     trending: {
       last_updated: string;
       source: string;
       tokens: TrendingToken[];
     } | null;
-    ledger: null; // Not integrated yet
+    ledger: LedgerSection | null;
   };
   metadata: {
-    debate_workflow_status: string;
+    debate_workflow_status: 'integrated' | 'not_integrated' | 'partial';
     observations_processed: number;
     last_scrape: string | null;
     scraper_version: string;
+  };
+}
+
+async function loadLedgerSection(): Promise<LedgerSection | null> {
+  try {
+    const raw = await fs.readFile(LEDGER_PATH, 'utf-8');
+    const ledger = JSON.parse(raw) as Ledger;
+    const high = Object.entries(ledger.entities)
+      .filter(([, e]) => e.confidence_state === 'FULL')
+      .map(([name, e]) => ({ name, ...e }));
+    return {
+      last_updated: ledger.last_updated,
+      version: ledger.version,
+      entity_count: Object.keys(ledger.entities).length,
+      high_confidence_entities: high,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function loadBriefSection(date: string): Promise<BriefSection | null> {
+  const [brief, latestRun] = await Promise.all([
+    loadDailyBrief(date),
+    pickLatestRunForDate(date),
+  ]);
+
+  // If neither a brief file nor a debate run exists for the date, there's
+  // nothing to surface.
+  if (!brief && !latestRun) return null;
+
+  const detail = latestRun ? await loadRunDetail(latestRun.id) : null;
+  const fallback: DailyBrief | null = brief;
+
+  return {
+    date,
+    source_path: fallback?.path ?? '',
+    frontmatter: fallback?.frontmatter ?? {},
+    agents: fallback?.agents ?? {},
+    referee_report: detail?.referee_report ?? null,
+    run_id: latestRun?.id ?? null,
+    run_status: latestRun?.status ?? null,
   };
 }
 
@@ -95,52 +172,62 @@ export async function buildContextBundle(date?: string): Promise<ContextBundle> 
   const targetDate = date || new Date().toISOString().split('T')[0];
   const now = new Date().toISOString();
 
-  // Get latest DexScreener observation
-  const latestObsPath = await getLatestObservation('onchain/dexscreener');
+  // Load all three sources in parallel — each can be absent independently.
+  const [latestObsPath, brief, ledger] = await Promise.all([
+    getLatestObservation('onchain/dexscreener'),
+    loadBriefSection(targetDate),
+    loadLedgerSection(),
+  ]);
 
-  if (!latestObsPath) {
-    return {
-      date: targetDate,
-      generated_at: now,
-      status: 'unavailable',
-      sections: {
-        brief: null,
-        trending: null,
-        ledger: null
-      },
-      metadata: {
-        debate_workflow_status: 'not_integrated',
-        observations_processed: 0,
-        last_scrape: null,
-        scraper_version: '1.0'
-      }
+  // Trending section is optional — only absent when no scraper has ever run.
+  let trending: ContextBundle['sections']['trending'] = null;
+  let lastScrape: string | null = null;
+  let scraperVersion = '1.0';
+  let observationsProcessed = 0;
+
+  if (latestObsPath) {
+    const observation = await readObservation(latestObsPath);
+    trending = {
+      last_updated: observation.frontmatter.collected_at,
+      source: observation.frontmatter.source,
+      tokens: parseObservationTokens(observation.body),
     };
+    lastScrape = observation.frontmatter.collected_at;
+    scraperVersion = observation.frontmatter.scraper_version;
+    observationsProcessed = 1;
   }
 
-  // Read observation
-  const observation = await readObservation(latestObsPath);
+  // Keep the original `status` contract: "complete" if the minimum trending
+  // slice is present, "unavailable" otherwise. This matches what the existing
+  // /api/meta-desk/context-bundle route checks for (`status === 'unavailable'`
+  // → HTTP 404, otherwise 200).
+  const status: ContextBundle['status'] = trending ? 'complete' : 'unavailable';
 
-  // Parse tokens from markdown
-  const tokens = parseObservationTokens(observation.body);
+  const sectionsPresent: ContextBundle['sections_present'] = [];
+  if (trending) sectionsPresent.push('trending');
+  if (brief) sectionsPresent.push('brief');
+  if (ledger) sectionsPresent.push('ledger');
+
+  let debateStatus: ContextBundle['metadata']['debate_workflow_status'];
+  if (brief && ledger) debateStatus = 'integrated';
+  else if (brief || ledger) debateStatus = 'partial';
+  else debateStatus = 'not_integrated';
 
   return {
     date: targetDate,
     generated_at: now,
-    status: 'complete',
+    status,
+    sections_present: sectionsPresent,
     sections: {
-      brief: null, // Debate workflow not integrated
-      trending: {
-        last_updated: observation.frontmatter.collected_at,
-        source: observation.frontmatter.source,
-        tokens
-      },
-      ledger: null // Debate workflow not integrated
+      brief,
+      trending,
+      ledger,
     },
     metadata: {
-      debate_workflow_status: 'not_integrated',
-      observations_processed: 1,
-      last_scrape: observation.frontmatter.collected_at,
-      scraper_version: observation.frontmatter.scraper_version
-    }
+      debate_workflow_status: debateStatus,
+      observations_processed: observationsProcessed,
+      last_scrape: lastScrape,
+      scraper_version: scraperVersion,
+    },
   };
 }
