@@ -19,6 +19,7 @@ import { ResolutionExecutor } from './resolution/resolution-executor';
 import { DirectResearchExecutor } from './resolution/direct-research-executor';
 import { SkepticReChallenger } from './resolution/skeptic-rechallenger';
 import { LedgerManager } from './resolution/ledger-manager';
+import { synthesizeReferee_withOptionalLLM } from './resolution/referee-synthesizer';
 
 export interface DebateRun {
   id: string;
@@ -510,19 +511,18 @@ export class DebateWorkflowOrchestrator {
   }
 
   /**
-   * Execute Referee synthesis with resolution results
+   * Execute Referee synthesis with resolution results.
+   *
+   * The deterministic path (synthesizeReferee) stratifies gaps into
+   * High-Confidence / Cautious / Watching tiers and is always cheap + safe.
+   * When REFEREE_USE_LLM=true and ANTHROPIC_API_KEY is present, the
+   * synthesizer also asks Claude Haiku for a richer "Portfolio-Level Read"
+   * paragraph; failure falls back to the deterministic narrative.
    */
-  private async executeRefereeSynthesis(dailyBrief: string, gaps: Gap[]): Promise<void> {
-    // This would invoke the Referee agent with the resolution outputs
-    // For now, create a placeholder that will be filled by actual agent invocation
-
-    const refereeSynthesis = `# Referee Synthesis\n\n## Resolution Results\n\n`;
-    // Would include gap resolution summary, confidence stratification, etc.
-
-    await fs.writeFile(
-      path.join(this.runDir, 'referee_report.md'),
-      refereeSynthesis
-    );
+  private async executeRefereeSynthesis(_dailyBrief: string, gaps: Gap[]): Promise<void> {
+    const date = this.runId.split('T')[0];
+    const report = await synthesizeReferee_withOptionalLLM(gaps, date);
+    await fs.writeFile(path.join(this.runDir, 'referee_report.md'), report);
   }
 
   /**
