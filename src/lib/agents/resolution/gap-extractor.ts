@@ -106,7 +106,7 @@ export class GapExtractor {
    */
   private extractFromRefereeSection(brief: string): Gap[] {
     const gaps: Gap[] = [];
-    const dontKnowRegex = /what we don't know.*?(?=##|$)/gis;
+    const dontKnowRegex = /what we don't know[\s\S]*?(?=##|$)/gi;
     const match = brief.match(dontKnowRegex);
 
     if (match) {

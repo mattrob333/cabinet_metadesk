@@ -184,13 +184,19 @@ export class ResolutionExecutor {
 
     while (Date.now() - startTime < maxWaitMs) {
       try {
-        const output = await getDaemonSessionOutput(sessionId);
+        const { status, output } = await getDaemonSessionOutput(sessionId);
         const elapsed = Math.round((Date.now() - startTime) / 1000);
 
         // Log progress if output is growing
         if (output.length > lastOutputLength) {
-          console.log(`[Polling] ${sessionId}: ${output.length} chars, ${elapsed}s elapsed`);
+          console.log(`[Polling] ${sessionId}: ${output.length} chars, ${elapsed}s elapsed (status=${status})`);
           lastOutputLength = output.length;
+        }
+
+        // If daemon reports the session is no longer running, return whatever we have.
+        if (status && status !== 'running') {
+          console.log(`[Polling] ${sessionId}: Session status=${status}, returning output`);
+          return output;
         }
 
         // Check if session is complete (look for completion markers)
