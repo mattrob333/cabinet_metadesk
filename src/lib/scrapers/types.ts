@@ -67,6 +67,37 @@ export interface DexScreenerResponse {
 // Processed Token Data (for observations)
 // ============================================================================
 
+// ============================================================================
+// X / Social Trending Narrative (from xAI Grok)
+// ============================================================================
+
+export interface XSamplePost {
+  url: string;
+  excerpt: string;
+  handle?: string;
+}
+
+export interface XTrendingNarrative {
+  rank: number;
+  entity: string; // Short proper name: ticker, protocol, or narrative slug
+  entity_type: 'token' | 'narrative' | 'protocol' | 'account';
+  narrative_summary: string;
+  sentiment: 'bullish' | 'bearish' | 'mixed' | 'neutral';
+  /** Free-form reach estimate from Grok (e.g. "~50K impressions in 24h"). */
+  estimated_reach: string;
+  top_voices: string[]; // Influential @handles driving the narrative
+  sample_posts: XSamplePost[];
+  why_trending: string;
+}
+
+export interface XScraperConfig {
+  model: string; // e.g. 'grok-4-latest', 'grok-4.20-reasoning'
+  topN: number; // How many narratives to include in observation
+  lookbackHours: number; // How far back to search X + web
+  /** Optional @handle allowlist to restrict x_search. Empty = unrestricted. */
+  allowedHandles: string[];
+}
+
 export interface TrendingToken {
   rank: number;
   ticker: string;
@@ -88,7 +119,7 @@ export interface TrendingToken {
 // ============================================================================
 
 export interface ObservationFrontmatter {
-  source: 'dexscreener' | 'twitter' | 'google-trends' | 'news';
+  source: 'dexscreener' | 'twitter' | 'x' | 'google-trends' | 'news' | 'grok';
   collected_at: string; // ISO timestamp
   language: string; // 'en', 'jp', 'kr', 'cn'
   entities: string[]; // Token tickers found in observation
@@ -98,6 +129,11 @@ export interface ObservationFrontmatter {
   // DexScreener-specific metadata
   tokens_found?: number;
   api_endpoint?: string;
+
+  // X/Grok-specific metadata
+  narratives_found?: number;
+  model?: string;
+  search_tools_used?: string[];
 }
 
 export interface Observation {
