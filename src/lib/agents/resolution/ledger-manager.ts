@@ -9,6 +9,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { Gap } from '../debate-workflow';
+import { extractEntityFromText, sanitizeEntityName } from './entity-utils';
 
 export interface LedgerEntity {
   type: 'token' | 'narrative' | 'protocol' | 'account';
@@ -160,7 +161,7 @@ export class LedgerManager {
 
     for (const gap of gaps) {
       // Try to extract entity name from question or blocking claim
-      const entityName = this.extractEntityName(gap.question, gap.blocking_claim);
+      const entityName = this.extractEntityName(gap);
 
       if (!entities[entityName]) {
         entities[entityName] = [];
@@ -172,34 +173,20 @@ export class LedgerManager {
   }
 
   /**
-   * Extract entity name from text (e.g., "PUNCH" from "When did PUNCH launch?")
+   * Extract entity name for a gap.
+   *
+   * Prefers the gap's explicit `entity` field (populated by LLMGapExtractor).
+   * Falls back to heuristic extraction from question + claim text, using the
+   * shared helpers in entity-utils.ts. The old implementation had a greedy
+   * `"([^"]+)"` regex that promoted sentence fragments like
+   * `" without seeing actual images"` to entity names — that path is gone.
    */
-  private extractEntityName(question: string, claim: string): string {
-    // Look for all-caps token names
-    const text = `${question} ${claim}`;
-    const matches = text.match(/\b([A-Z]{2,})\b/);
-
-    if (matches) {
-      return matches[1];
+  private extractEntityName(gap: Gap): string {
+    if (gap.entity) {
+      const sanitized = sanitizeEntityName(gap.entity);
+      if (sanitized) return sanitized;
     }
-
-    // Look for quoted names
-    const quotedMatch = text.match(/"([^"]+)"/);
-    if (quotedMatch) {
-      return quotedMatch[1];
-    }
-
-    // Look for common patterns
-    if (/agentic payments?/i.test(text)) {
-      return 'Agentic Payments';
-    }
-
-    if (/drift.*exploit/i.test(text)) {
-      return 'Drift Exploit';
-    }
-
-    // Default to generic
-    return 'General';
+    return extractEntityFromText(gap.question, gap.blocking_claim);
   }
 
   /**

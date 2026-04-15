@@ -37,6 +37,13 @@ export interface Gap {
   blocking_claim: string;
   assigned_to: string;
   state: 'PENDING' | 'RESOLVED' | 'PARTIALLY_RESOLVED' | 'UNRESOLVABLE';
+  /**
+   * Named entity this gap is about (e.g. "SNIGGA", "Agentic Payments").
+   * Optional because the regex-based gap extractor doesn't produce it; the
+   * LLM gap extractor does. When present, LedgerManager uses it directly
+   * instead of trying to fish an entity name out of free text.
+   */
+  entity?: string;
   evidence?: string;
   sources?: string[];
   reason?: string;
