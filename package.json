@@ -15,6 +15,8 @@
     "scrape:x": "tsx scripts/run-x-scraper.ts",
     "scrape:x:test": "tsx scripts/run-x-scraper.ts --dry-run",
     "scrape:all": "tsx scripts/run-dex-scraper.ts && tsx scripts/run-x-scraper.ts",
+    "dev:pipeline": "tsx scripts/run-pipeline-scheduler.ts",
+    "pipeline:once": "tsx scripts/run-pipeline-scheduler.ts --once",
     "build": "next build",
     "electron:prep": "node scripts/prepare-electron-package.mjs",
     "release:manifest": "node scripts/generate-release-manifest.mjs",
@@ -26,7 +28,7 @@
     "electron:make": "npm run build && npm run electron:prep && electron-forge make",
     "lint": "eslint",
     "test:unit": "tsx --test test/update-system.test.ts",
-    "test": "tsx --test src/lib/agents/**/*.test.ts src/lib/scrapers/**/*.test.ts",
+    "test": "tsx --test src/lib/agents/**/*.test.ts src/lib/scrapers/**/*.test.ts src/lib/meta-desk/**/*.test.ts",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper 2>/dev/null; xattr -d com.apple.provenance node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper 2>/dev/null; xattr -d com.apple.provenance node_modules/node-pty/prebuilds/darwin-arm64/pty.node 2>/dev/null; true"
   },
   "dependencies": {
