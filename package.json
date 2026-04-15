@@ -17,6 +17,7 @@
     "scrape:all": "tsx scripts/run-dex-scraper.ts && tsx scripts/run-x-scraper.ts",
     "dev:pipeline": "tsx scripts/run-pipeline-scheduler.ts",
     "pipeline:once": "tsx scripts/run-pipeline-scheduler.ts --once",
+    "runs:index": "tsx scripts/rebuild-runs-index.ts",
     "build": "next build",
     "electron:prep": "node scripts/prepare-electron-package.mjs",
     "release:manifest": "node scripts/generate-release-manifest.mjs",

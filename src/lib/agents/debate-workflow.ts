@@ -20,6 +20,7 @@ import { DirectResearchExecutor } from './resolution/direct-research-executor';
 import { SkepticReChallenger } from './resolution/skeptic-rechallenger';
 import { LedgerManager } from './resolution/ledger-manager';
 import { synthesizeReferee_withOptionalLLM } from './resolution/referee-synthesizer';
+import { writeRunIndex, writeRunsRootIndex } from '../meta-desk/run-index-builder';
 
 export interface DebateRun {
   id: string;
@@ -286,6 +287,12 @@ export class DebateWorkflowOrchestrator {
       path.join(this.runDir, 'run.json'),
       JSON.stringify(runMetadata, null, 2)
     );
+
+    // Seed the per-run index.md immediately so the sidebar has a friendly
+    // title for this folder (instead of the raw ISO run ID) while the
+    // workflow is still running. Regenerated on complete/fail.
+    await writeRunIndex(this.runId).catch(() => {});
+    await writeRunsRootIndex().catch(() => {});
   }
 
   /**
@@ -537,6 +544,12 @@ export class DebateWorkflowOrchestrator {
     metadata.completed_at = new Date().toISOString();
 
     await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+
+    // Regenerate the per-run and top-level run indexes so the sidebar
+    // reflects the terminal status + final gap counts immediately. Failures
+    // are swallowed so a broken index never masks a successful run.
+    await writeRunIndex(this.runId).catch(() => {});
+    await writeRunsRootIndex().catch(() => {});
   }
 
   /**
@@ -551,6 +564,9 @@ export class DebateWorkflowOrchestrator {
     metadata.completed_at = new Date().toISOString();
 
     await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+
+    await writeRunIndex(this.runId).catch(() => {});
+    await writeRunsRootIndex().catch(() => {});
   }
 }
 
